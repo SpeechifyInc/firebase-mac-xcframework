@@ -12,7 +12,7 @@ set -euo pipefail
 #     FirebaseAuthInterop, GoogleUtilities, FBLPromises, nanopb
 #
 #   Built from source for macOS (arm64 + x86_64):
-#     GoogleSignIn, AppAuthCore, GTMAppAuth, GTMSessionFetcherCore
+#     GoogleSignIn, AppAuthCore, GTMAppAuth, GTMSessionFetcher
 #
 # Usage:
 #   FIREBASE_VERSION=12.8.0 GOOGLESIGNIN_VERSION=7.0.0 bash scripts/build.sh
@@ -188,8 +188,12 @@ MMEOF
   rm -rf "${STAGING}"
 }
 
-# -- GTMSessionFetcherCore --
-make_xcframework "GTMSessionFetcherCore" "GTMSessionFetcherCore.build" \
+# -- GTMSessionFetcher --
+# Named "GTMSessionFetcher" (not GTMSessionFetcherCore) because:
+#   1. Headers use #include <GTMSessionFetcher/GTMSessionFetcher.h>
+#   2. FirebaseAuth.swiftinterface requires `import GTMSessionFetcher`
+#   3. GTMAppAuth headers use #import <GTMSessionFetcher/GTMSessionFetcher.h>
+make_xcframework "GTMSessionFetcher" "GTMSessionFetcherCore.build" \
   "gtm-session-fetcher/Sources/Core/Public/GTMSessionFetcher"
 
 # -- AppAuthCore --
