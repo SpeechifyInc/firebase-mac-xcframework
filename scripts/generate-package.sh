@@ -23,18 +23,10 @@ if [ ! -f "${CHECKSUMS_FILE}" ]; then
   exit 1
 fi
 
-# Read checksums into an associative array (name -> checksum)
-declare -A CHECKSUMS
-while read -r zip_name checksum; do
-  # Strip .xcframework.zip suffix to get the target name
-  CHECKSUMS["${zip_name}"]="${checksum}"
-done < "${CHECKSUMS_FILE}"
-
-# Helper: look up checksum for a given xcframework name
+# Helper: look up checksum for a given xcframework name from checksums.txt
 get_checksum() {
-  local name="$1"
-  local key="${name}.xcframework.zip"
-  echo "${CHECKSUMS[${key}]:-}"
+  local zip_name="$1.xcframework.zip"
+  grep "^${zip_name} " "${CHECKSUMS_FILE}" | awk '{print $2}'
 }
 
 # Build the binary targets block
