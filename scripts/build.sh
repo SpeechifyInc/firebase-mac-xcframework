@@ -126,7 +126,7 @@ X86_REL="${WORK_DIR}/build-x86_64/x86_64-apple-macosx/release"
 CHECKOUTS="${WORK_DIR}/build-arm64/checkouts"
 STAGING="${WORK_DIR}/staging"
 
-# Helper: create xcframework from per-target .o files
+# Helper: create xcframework using a framework bundle (avoids module.modulemap conflicts)
 # Usage: make_xcframework <xcf-name> <build-subdir> <header-path-relative-to-checkouts>
 make_xcframework() {
   local name="$1"
@@ -138,14 +138,13 @@ make_xcframework() {
 
   echo "  Creating ${name}.xcframework..."
 
-  rm -rf "${STAGING}"
-  mkdir -p "${STAGING}/arm64" "${STAGING}/x86_64" "${STAGING}/headers"
-
-  # Collect .o files (recursively — some targets have subdirs like macOS/, iOS/)
   if [ ! -d "${arm64_dir}" ]; then
     echo "    WARNING: arm64 build dir not found: ${arm64_dir}"
     return 1
   fi
+
+  rm -rf "${STAGING}"
+  mkdir -p "${STAGING}/arm64" "${STAGING}/x86_64"
 
   # Create per-arch static libraries from .o files
   find "${arm64_dir}" -name '*.o' -print0 | xargs -0 ar rcs "${STAGING}/arm64/lib${name}.a"
@@ -155,29 +154,35 @@ make_xcframework() {
   lipo -create "${STAGING}/arm64/lib${name}.a" "${STAGING}/x86_64/lib${name}.a" \
     -output "${STAGING}/lib${name}.a"
 
-  # Collect headers
+  # Build a framework bundle — avoids the shared include/module.modulemap conflict
+  local fw="${STAGING}/${name}.framework"
+  mkdir -p "${fw}/Headers" "${fw}/Modules"
+
+  # Binary
+  cp "${STAGING}/lib${name}.a" "${fw}/${name}"
+
+  # Headers
   if [ -n "${header_rel}" ] && [ -d "${CHECKOUTS}/${header_rel}" ]; then
-    find "${CHECKOUTS}/${header_rel}" -name '*.h' -exec cp {} "${STAGING}/headers/" \;
+    find "${CHECKOUTS}/${header_rel}" -name '*.h' -exec cp {} "${fw}/Headers/" \;
   fi
 
-  # Generate module map
+  # Module map
   local umbrella=""
-  if [ -f "${STAGING}/headers/${name}.h" ]; then
+  if [ -f "${fw}/Headers/${name}.h" ]; then
     umbrella="umbrella header \"${name}.h\""
   else
     umbrella="umbrella \".\""
   fi
 
-  cat > "${STAGING}/headers/module.modulemap" << MMEOF
-module ${name} {
+  cat > "${fw}/Modules/module.modulemap" << MMEOF
+framework module ${name} {
     ${umbrella}
     export *
 }
 MMEOF
 
   xcodebuild -create-xcframework \
-    -library "${STAGING}/lib${name}.a" \
-    -headers "${STAGING}/headers" \
+    -framework "${fw}" \
     -output "${OUTPUT_DIR}/${name}.xcframework" 2>&1 | grep -v "^$" || true
 
   rm -rf "${STAGING}"
