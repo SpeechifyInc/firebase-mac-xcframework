@@ -31,11 +31,28 @@ jobs:
           GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
         run: bash scripts/build.sh
 
+      - name: Generate Package.swift
+        env:
+          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
+          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
+        run: |
+          TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
+          TAG="${TAG}" CHECKSUMS_FILE="/tmp/firebase-mac-build/zips/checksums.txt" \
+            bash scripts/generate-package.sh
+
+      - name: Commit Package.swift
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Package.swift
+          git diff --cached --quiet || git commit -m "Update Package.swift checksums"
+          git push
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: firebase-mac-xcframeworks
-          path: /tmp/firebase-mac-build/firebase-mac-xcframeworks.zip
+          path: /tmp/firebase-mac-build/zips/
 
       - name: Create release
         if: inputs.create_release || false
@@ -45,12 +62,32 @@ jobs:
           GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
         run: |
           TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
+
+          # Tag the current commit (which includes the updated Package.swift)
+          git tag -f "${TAG}"
+          git push -f origin "${TAG}"
+
+          # Collect all release assets
+          ASSETS=()
+          for zip in /tmp/firebase-mac-build/zips/*.zip; do
+            ASSETS+=("${zip}")
+          done
+
           gh release create "${TAG}" \
             --title "Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION} (macOS)" \
             --notes "Pre-built macOS xcframeworks for:
           - Firebase iOS SDK ${FIREBASE_VERSION} (core, auth)
           - GoogleSignIn-iOS ${GOOGLESIGNIN_VERSION}
-          - AppAuth, GTMAppAuth, GTMSessionFetcherCore (GoogleSignIn dependencies)
+          - AppAuth, GTMAppAuth, GTMSessionFetcher (GoogleSignIn dependencies)
+
+          ## SPM Usage
+
+          \`\`\`swift
+          .package(url: \"https://github.com/SpeechifyInc/firebase-mac-xcframework.git\",
+                   exact: \"${TAG}\")
+          \`\`\`
+
+          Products: \`FirebaseCore\`, \`FirebaseAuth\`, \`GoogleSignIn\`
 
           Built on macOS 14 (Xcode 15.4)." \
-            /tmp/firebase-mac-build/firebase-mac-xcframeworks.zip
+            "${ASSETS[@]}"

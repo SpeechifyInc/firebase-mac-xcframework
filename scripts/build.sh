@@ -228,16 +228,41 @@ ls -1 "${OUTPUT_DIR}" | grep '\.xcframework$' | while read -r fw; do
   echo "    ${fw}"
 done
 
-cd "${OUTPUT_DIR}"
-# -y preserves symbolic links (critical for macOS versioned frameworks)
-zip -r -q -y "${WORK_DIR}/firebase-mac-xcframeworks.zip" .
+ZIPS_DIR="${WORK_DIR}/zips"
+mkdir -p "${ZIPS_DIR}"
 
-CHECKSUM=$(swift package compute-checksum "${WORK_DIR}/firebase-mac-xcframeworks.zip" 2>/dev/null || shasum -a 256 "${WORK_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
-SIZE=$(du -h "${WORK_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
+# -- Individual xcframework zips (for SPM binary targets) --
+echo ""
+echo "  Creating individual xcframework zips..."
+> "${ZIPS_DIR}/checksums.txt"
+
+for xcf in "${OUTPUT_DIR}"/*.xcframework; do
+  name=$(basename "${xcf}" .xcframework)
+  zip_name="${name}.xcframework.zip"
+  (cd "${OUTPUT_DIR}" && zip -r -q -y "${ZIPS_DIR}/${zip_name}" "${name}.xcframework")
+  checksum=$(shasum -a 256 "${ZIPS_DIR}/${zip_name}" | awk '{print $1}')
+  echo "${zip_name} ${checksum}" >> "${ZIPS_DIR}/checksums.txt"
+  echo "    ${zip_name} (${checksum:0:12}...)"
+done
+
+# -- GoogleSignIn resource bundle --
+BUNDLE_DIR="${OUTPUT_DIR}/GoogleSignIn_GoogleSignIn.bundle"
+if [ -d "${BUNDLE_DIR}" ]; then
+  (cd "${OUTPUT_DIR}" && zip -r -q -y "${ZIPS_DIR}/GoogleSignIn_GoogleSignIn.bundle.zip" "GoogleSignIn_GoogleSignIn.bundle")
+  checksum=$(shasum -a 256 "${ZIPS_DIR}/GoogleSignIn_GoogleSignIn.bundle.zip" | awk '{print $1}')
+  echo "GoogleSignIn_GoogleSignIn.bundle.zip ${checksum}" >> "${ZIPS_DIR}/checksums.txt"
+  echo "    GoogleSignIn_GoogleSignIn.bundle.zip (${checksum:0:12}...)"
+fi
+
+# -- Combined zip (backward compat for Makefile-based setup) --
+(cd "${OUTPUT_DIR}" && zip -r -q -y "${ZIPS_DIR}/firebase-mac-xcframeworks.zip" .)
+COMBINED_CHECKSUM=$(shasum -a 256 "${ZIPS_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
+COMBINED_SIZE=$(du -h "${ZIPS_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
 
 echo ""
 echo "========================================="
 echo "Build complete!"
-echo "Output: ${WORK_DIR}/firebase-mac-xcframeworks.zip (${SIZE})"
-echo "SHA-256 checksum: ${CHECKSUM}"
+echo "Individual zips: ${ZIPS_DIR}/"
+echo "Combined zip:    ${ZIPS_DIR}/firebase-mac-xcframeworks.zip (${COMBINED_SIZE})"
+echo "Checksums:       ${ZIPS_DIR}/checksums.txt"
 echo "========================================="
