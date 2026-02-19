@@ -194,7 +194,8 @@ ls -1 "${OUTPUT_DIR}" | grep '\.xcframework$' | while read -r fw; do
 done
 
 cd "${OUTPUT_DIR}"
-zip -r -q "${WORK_DIR}/firebase-mac-xcframeworks.zip" .
+# -y preserves symbolic links (critical for macOS versioned frameworks)
+zip -r -q -y "${WORK_DIR}/firebase-mac-xcframeworks.zip" .
 
 CHECKSUM=$(swift package compute-checksum "${WORK_DIR}/firebase-mac-xcframeworks.zip" 2>/dev/null || shasum -a 256 "${WORK_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
 SIZE=$(du -h "${WORK_DIR}/firebase-mac-xcframeworks.zip" | awk '{print $1}')
