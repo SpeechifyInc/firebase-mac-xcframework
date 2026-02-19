@@ -39,14 +39,9 @@ jobs:
           TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
           TAG="${TAG}" CHECKSUMS_FILE="/tmp/firebase-mac-build/zips/checksums.txt" \
             bash scripts/generate-package.sh
-
-      - name: Commit Package.swift
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift
-          git diff --cached --quiet || git commit -m "Update Package.swift checksums"
-          git push
+          echo "Generated Package.swift — checksums must be committed manually"
+          echo "or via a PR before tagging the release."
+          cp Package.swift /tmp/firebase-mac-build/zips/Package.swift
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -63,16 +58,11 @@ jobs:
         run: |
           TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
 
-          # Tag the current commit (which includes the updated Package.swift)
+          # Tag the current commit
           git tag -f "${TAG}"
           git push -f origin "${TAG}"
 
-          # Collect all release assets
-          ASSETS=()
-          for zip in /tmp/firebase-mac-build/zips/*.zip; do
-            ASSETS+=("${zip}")
-          done
-
+          # Upload all zips as release assets
           gh release create "${TAG}" \
             --title "Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION} (macOS)" \
             --notes "Pre-built macOS xcframeworks for:
@@ -89,5 +79,9 @@ jobs:
 
           Products: \`FirebaseCore\`, \`FirebaseAuth\`, \`GoogleSignIn\`
 
-          Built on macOS 14 (Xcode 15.4)." \
-            "${ASSETS[@]}"
+          Built on macOS 14 (Xcode 15.4).
+
+          > **Note:** After creating this release, download the generated
+          > \`Package.swift\` from the workflow artifact and commit it to master
+          > so SPM checksums match the release assets." \
+            /tmp/firebase-mac-build/zips/*.zip
