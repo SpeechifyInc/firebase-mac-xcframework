@@ -1,0 +1,56 @@
+name: Build macOS XCFrameworks
+
+on:
+  workflow_dispatch:
+    inputs:
+      firebase_version:
+        description: 'Firebase iOS SDK version'
+        required: true
+        default: '12.8.0'
+      google_signin_version:
+        description: 'GoogleSignIn-iOS version'
+        required: true
+        default: '7.0.0'
+      create_release:
+        description: 'Create a GitHub release'
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Build xcframeworks
+        env:
+          FIREBASE_VERSION: ${{ inputs.firebase_version }}
+          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version }}
+        run: bash scripts/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firebase-mac-xcframeworks
+          path: /tmp/firebase-mac-build/firebase-mac-xcframeworks.zip
+
+      - name: Create release
+        if: inputs.create_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FIREBASE_VERSION: ${{ inputs.firebase_version }}
+          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version }}
+        run: |
+          TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
+          gh release create "${TAG}" \
+            --title "Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION} (macOS)" \
+            --notes "Pre-built macOS xcframeworks for:
+          - Firebase iOS SDK ${FIREBASE_VERSION} (core, auth)
+          - GoogleSignIn-iOS ${GOOGLESIGNIN_VERSION}
+          - AppAuth, GTMAppAuth, GTMSessionFetcherCore (GoogleSignIn dependencies)
+
+          Built on macOS 14 (Xcode 15.4)." \
+            /tmp/firebase-mac-build/firebase-mac-xcframeworks.zip
