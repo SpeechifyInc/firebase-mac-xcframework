@@ -12,9 +12,7 @@ set -euo pipefail
 #     FirebaseAuthInterop, GoogleUtilities, FBLPromises, nanopb
 #
 #   Built from source for macOS (arm64 + x86_64):
-#     GoogleSignIn.xcframework — merged static lib containing GoogleSignIn,
-#     AppAuth, GTMAppAuth, and GTMSessionFetcherCore. Only GoogleSignIn's
-#     public headers are exposed (others are link-time-only deps).
+#     GoogleSignIn, AppAuthCore, GTMAppAuth, GTMSessionFetcherCore
 #
 # Usage:
 #   FIREBASE_VERSION=12.8.0 GOOGLESIGNIN_VERSION=7.0.0 bash scripts/build.sh
@@ -60,7 +58,7 @@ done
 echo "  Done — ${#FIREBASE_XCFRAMEWORKS[@]} Firebase xcframeworks copied."
 
 # =============================================================================
-# Step 2: Build GoogleSignIn from source for macOS (arm64 + x86_64)
+# Step 2: Build GoogleSignIn + deps from source for macOS (arm64 + x86_64)
 # =============================================================================
 echo ""
 echo "==> [2/3] Building GoogleSignIn ${GOOGLESIGNIN_VERSION} for macOS..."
@@ -68,7 +66,7 @@ echo "==> [2/3] Building GoogleSignIn ${GOOGLESIGNIN_VERSION} for macOS..."
 BUILDER_DIR="${WORK_DIR}/builder"
 mkdir -p "${BUILDER_DIR}/Sources"
 
-# Static library product — SPM merges all transitive deps into one .a
+# Static library product — forces SPM to create .a and preserves per-target .o files
 cat > "${BUILDER_DIR}/Package.swift" << EOF
 // swift-tools-version: 5.9
 import PackageDescription
@@ -118,69 +116,97 @@ swift build -c release \
 echo "  Done — both architectures built."
 
 # =============================================================================
-# Step 3: Create GoogleSignIn.xcframework
+# Step 3: Create xcframeworks from individual target .o files
 # =============================================================================
 echo ""
-echo "==> [3/3] Creating GoogleSignIn.xcframework..."
+echo "==> [3/3] Creating xcframeworks..."
 
-ARM64_LIB="${WORK_DIR}/build-arm64/arm64-apple-macosx/release/libGoogleSignInLib.a"
-X86_LIB="${WORK_DIR}/build-x86_64/x86_64-apple-macosx/release/libGoogleSignInLib.a"
+ARM64_REL="${WORK_DIR}/build-arm64/arm64-apple-macosx/release"
+X86_REL="${WORK_DIR}/build-x86_64/x86_64-apple-macosx/release"
 CHECKOUTS="${WORK_DIR}/build-arm64/checkouts"
+STAGING="${WORK_DIR}/staging"
 
-if [ ! -f "${ARM64_LIB}" ]; then
-  echo "ERROR: arm64 lib not found at ${ARM64_LIB}"
-  echo "Contents of build-arm64 release dir:"
-  ls -la "${WORK_DIR}/build-arm64/arm64-apple-macosx/release/" 2>/dev/null || echo "  dir not found"
-  find "${WORK_DIR}/build-arm64" -name "*.a" 2>/dev/null || echo "  no .a files found"
-  exit 1
-fi
+# Helper: create xcframework from per-target .o files
+# Usage: make_xcframework <xcf-name> <build-subdir> <header-path-relative-to-checkouts>
+make_xcframework() {
+  local name="$1"
+  local build_dir="$2"
+  local header_rel="$3"
 
-if [ ! -f "${X86_LIB}" ]; then
-  echo "ERROR: x86_64 lib not found at ${X86_LIB}"
-  exit 1
-fi
+  local arm64_dir="${ARM64_REL}/${build_dir}"
+  local x86_dir="${X86_REL}/${build_dir}"
 
-# Collect GoogleSignIn public headers
-HEADER_SRC="${CHECKOUTS}/GoogleSignIn-iOS/GoogleSignIn/Sources/Public/GoogleSignIn"
-HEADERS_DIR="${WORK_DIR}/headers"
-mkdir -p "${HEADERS_DIR}"
+  echo "  Creating ${name}.xcframework..."
 
-if [ -d "${HEADER_SRC}" ]; then
-  find "${HEADER_SRC}" -name '*.h' -exec cp {} "${HEADERS_DIR}/" \;
-  echo "  Copied $(ls "${HEADERS_DIR}" | wc -l | tr -d ' ') public headers"
-else
-  echo "WARNING: GoogleSignIn public headers not found at ${HEADER_SRC}"
-  echo "  Searching checkouts..."
-  find "${CHECKOUTS}" -path "*/GoogleSignIn/Sources/Public/*" -name "*.h" -exec cp {} "${HEADERS_DIR}/" \; 2>/dev/null || true
-fi
+  rm -rf "${STAGING}"
+  mkdir -p "${STAGING}/arm64" "${STAGING}/x86_64" "${STAGING}/headers"
 
-# Generate module map
-cat > "${HEADERS_DIR}/module.modulemap" << 'MMEOF'
-module GoogleSignIn {
-    umbrella header "GoogleSignIn.h"
+  # Collect .o files (recursively — some targets have subdirs like macOS/, iOS/)
+  if [ ! -d "${arm64_dir}" ]; then
+    echo "    WARNING: arm64 build dir not found: ${arm64_dir}"
+    return 1
+  fi
+
+  # Create per-arch static libraries from .o files
+  find "${arm64_dir}" -name '*.o' -print0 | xargs -0 ar rcs "${STAGING}/arm64/lib${name}.a"
+  find "${x86_dir}" -name '*.o' -print0 | xargs -0 ar rcs "${STAGING}/x86_64/lib${name}.a"
+
+  # Create universal binary
+  lipo -create "${STAGING}/arm64/lib${name}.a" "${STAGING}/x86_64/lib${name}.a" \
+    -output "${STAGING}/lib${name}.a"
+
+  # Collect headers
+  if [ -n "${header_rel}" ] && [ -d "${CHECKOUTS}/${header_rel}" ]; then
+    find "${CHECKOUTS}/${header_rel}" -name '*.h' -exec cp {} "${STAGING}/headers/" \;
+  fi
+
+  # Generate module map
+  local umbrella=""
+  if [ -f "${STAGING}/headers/${name}.h" ]; then
+    umbrella="umbrella header \"${name}.h\""
+  else
+    umbrella="umbrella \".\""
+  fi
+
+  cat > "${STAGING}/headers/module.modulemap" << MMEOF
+module ${name} {
+    ${umbrella}
     export *
 }
 MMEOF
 
-# Create universal (fat) binary — xcframework expects one lib per platform
-UNIVERSAL_LIB="${WORK_DIR}/universal/libGoogleSignIn.a"
-mkdir -p "${WORK_DIR}/universal"
-lipo -create "${ARM64_LIB}" "${X86_LIB}" -output "${UNIVERSAL_LIB}"
+  xcodebuild -create-xcframework \
+    -library "${STAGING}/lib${name}.a" \
+    -headers "${STAGING}/headers" \
+    -output "${OUTPUT_DIR}/${name}.xcframework" 2>&1 | grep -v "^$" || true
 
-# Create xcframework with universal macOS binary
-xcodebuild -create-xcframework \
-  -library "${UNIVERSAL_LIB}" \
-  -headers "${HEADERS_DIR}" \
-  -output "${OUTPUT_DIR}/GoogleSignIn.xcframework"
+  rm -rf "${STAGING}"
+}
 
-echo "  Created GoogleSignIn.xcframework"
+# -- GTMSessionFetcherCore --
+make_xcframework "GTMSessionFetcherCore" "GTMSessionFetcherCore.build" \
+  "gtm-session-fetcher/Sources/Core/Public/GTMSessionFetcher"
 
-# Also copy the GoogleSignIn resource bundle if it exists
-BUNDLE_ARM64="${WORK_DIR}/build-arm64/arm64-apple-macosx/release/GoogleSignIn_GoogleSignIn.bundle"
+# -- AppAuthCore --
+make_xcframework "AppAuthCore" "AppAuthCore.build" \
+  "AppAuth-iOS/Sources/AppAuthCore"
+
+# -- GTMAppAuth --
+make_xcframework "GTMAppAuth" "GTMAppAuth.build" \
+  "GTMAppAuth/GTMAppAuth/Sources/Public/GTMAppAuth"
+
+# -- GoogleSignIn --
+make_xcframework "GoogleSignIn" "GoogleSignIn.build" \
+  "GoogleSignIn-iOS/GoogleSignIn/Sources/Public/GoogleSignIn"
+
+# Copy GoogleSignIn resource bundle
+BUNDLE_ARM64="${ARM64_REL}/GoogleSignIn_GoogleSignIn.bundle"
 if [ -d "${BUNDLE_ARM64}" ]; then
   cp -R "${BUNDLE_ARM64}" "${OUTPUT_DIR}/GoogleSignIn_GoogleSignIn.bundle"
   echo "  Copied GoogleSignIn resource bundle"
 fi
+
+echo "  Done."
 
 # =============================================================================
 # Package everything
