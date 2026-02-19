@@ -1,6 +1,8 @@
 name: Build macOS XCFrameworks
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       firebase_version:
@@ -27,8 +29,8 @@ jobs:
 
       - name: Build xcframeworks
         env:
-          FIREBASE_VERSION: ${{ inputs.firebase_version }}
-          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version }}
+          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
+          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
         run: bash scripts/build.sh
 
       - name: Upload artifact
@@ -38,11 +40,11 @@ jobs:
           path: /tmp/firebase-mac-build/firebase-mac-xcframeworks.zip
 
       - name: Create release
-        if: inputs.create_release
+        if: inputs.create_release || false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FIREBASE_VERSION: ${{ inputs.firebase_version }}
-          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version }}
+          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
+          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
         run: |
           TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
           gh release create "${TAG}" \
