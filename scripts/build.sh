@@ -181,6 +181,32 @@ framework module ${name} {
 }
 MMEOF
 
+  # Info.plist (required by Xcode for embedding/code signing)
+  cat > "${fw}/Info.plist" << IPEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>${name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.speechify.${name}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>${name}</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+</dict>
+</plist>
+IPEOF
+
   xcodebuild -create-xcframework \
     -framework "${fw}" \
     -output "${OUTPUT_DIR}/${name}.xcframework" 2>&1 | grep -v "^$" || true

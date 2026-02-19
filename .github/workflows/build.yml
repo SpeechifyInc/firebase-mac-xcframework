@@ -1,23 +1,99 @@
 name: Build macOS XCFrameworks
 
 on:
+  schedule:
+    # 1st and 15th of each month at 9am UTC
+    - cron: '0 9 1,15 * *'
   workflow_dispatch:
     inputs:
       firebase_version:
-        description: 'Firebase iOS SDK version'
-        required: true
-        default: '12.8.0'
+        description: 'Firebase iOS SDK version (leave empty to auto-detect latest)'
+        required: false
+        default: ''
       google_signin_version:
-        description: 'GoogleSignIn-iOS version'
-        required: true
-        default: '7.0.0'
-      create_release:
-        description: 'Create a GitHub release'
+        description: 'GoogleSignIn-iOS version (leave empty to auto-detect latest)'
+        required: false
+        default: ''
+      force_build:
+        description: 'Force build even if tags already exist'
         type: boolean
-        default: true
+        default: false
 
 jobs:
+  # ===========================================================================
+  # Job 1: Detect latest upstream versions, skip if already released
+  # ===========================================================================
+  check-updates:
+    runs-on: ubuntu-latest
+    outputs:
+      firebase_version: ${{ steps.detect.outputs.firebase_version }}
+      googlesignin_version: ${{ steps.detect.outputs.googlesignin_version }}
+      descriptive_tag: ${{ steps.detect.outputs.descriptive_tag }}
+      semver_tag: ${{ steps.detect.outputs.semver_tag }}
+      should_build: ${{ steps.detect.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need tags
+
+      - name: Detect versions and check tags
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # --- Resolve Firebase version ---
+          if [ -n "${{ inputs.firebase_version }}" ]; then
+            FIREBASE_VERSION="${{ inputs.firebase_version }}"
+            echo "Firebase version (manual): ${FIREBASE_VERSION}"
+          else
+            FIREBASE_VERSION=$(gh api repos/firebase/firebase-ios-sdk/releases/latest --jq '.tag_name')
+            echo "Firebase version (auto-detected): ${FIREBASE_VERSION}"
+          fi
+
+          # --- Resolve GoogleSignIn version ---
+          if [ -n "${{ inputs.google_signin_version }}" ]; then
+            GOOGLESIGNIN_VERSION="${{ inputs.google_signin_version }}"
+            echo "GoogleSignIn version (manual): ${GOOGLESIGNIN_VERSION}"
+          else
+            GOOGLESIGNIN_VERSION=$(gh api repos/google/GoogleSignIn-iOS/releases/latest --jq '.tag_name')
+            echo "GoogleSignIn version (auto-detected): ${GOOGLESIGNIN_VERSION}"
+          fi
+
+          # Strip leading 'v' if present (some repos tag as v1.2.3)
+          FIREBASE_VERSION="${FIREBASE_VERSION#v}"
+          GOOGLESIGNIN_VERSION="${GOOGLESIGNIN_VERSION#v}"
+
+          DESCRIPTIVE_TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
+          SEMVER_TAG="${FIREBASE_VERSION}"
+
+          echo "firebase_version=${FIREBASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "googlesignin_version=${GOOGLESIGNIN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "descriptive_tag=${DESCRIPTIVE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "semver_tag=${SEMVER_TAG}" >> "$GITHUB_OUTPUT"
+
+          # --- Check if we should build ---
+          FORCE="${{ inputs.force_build }}"
+          if [ "${FORCE}" = "true" ]; then
+            echo "Force build requested"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check if descriptive tag already exists
+          if git rev-parse "refs/tags/${DESCRIPTIVE_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${DESCRIPTIVE_TAG} already exists — skipping build"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${DESCRIPTIVE_TAG} not found — build needed"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ===========================================================================
+  # Job 2: Build xcframeworks and generate Package.swift
+  # ===========================================================================
   build:
+    needs: check-updates
+    if: needs.check-updates.outputs.should_build == 'true'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -27,43 +103,100 @@ jobs:
 
       - name: Build xcframeworks
         env:
-          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
-          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
+          FIREBASE_VERSION: ${{ needs.check-updates.outputs.firebase_version }}
+          GOOGLESIGNIN_VERSION: ${{ needs.check-updates.outputs.googlesignin_version }}
         run: bash scripts/build.sh
 
       - name: Generate Package.swift
         env:
-          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
-          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
-        run: |
-          TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
-          TAG="${TAG}" CHECKSUMS_FILE="/tmp/firebase-mac-build/zips/checksums.txt" \
-            bash scripts/generate-package.sh
-          echo "Generated Package.swift — checksums must be committed manually"
-          echo "or via a PR before tagging the release."
-          cp Package.swift /tmp/firebase-mac-build/zips/Package.swift
+          TAG: ${{ needs.check-updates.outputs.descriptive_tag }}
+          CHECKSUMS_FILE: /tmp/firebase-mac-build/zips/checksums.txt
+        run: bash scripts/generate-package.sh
 
-      - name: Upload artifact
+      - name: Validate Package.swift
+        run: bash scripts/validate-package.sh
+
+      - name: Prepare upload
+        run: |
+          cp Package.swift /tmp/firebase-mac-build/zips/Package.swift
+          # Also copy Sources/ so the release job can commit them
+          cp -R Sources /tmp/firebase-mac-build/zips/Sources
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: firebase-mac-xcframeworks
           path: /tmp/firebase-mac-build/zips/
 
-      - name: Create release
-        if: inputs.create_release || false
+  # ===========================================================================
+  # Job 3: Commit Package.swift, tag, and create GitHub Release
+  # ===========================================================================
+  release:
+    needs: [check-updates, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: firebase-mac-xcframeworks
+          path: artifacts
+
+      - name: Commit Package.swift and Sources
+        env:
+          FIREBASE_VERSION: ${{ needs.check-updates.outputs.firebase_version }}
+          GOOGLESIGNIN_VERSION: ${{ needs.check-updates.outputs.googlesignin_version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Update Package.swift
+          cp artifacts/Package.swift Package.swift
+
+          # Update Sources/ (new products may have been added)
+          if [ -d artifacts/Sources ]; then
+            cp -R artifacts/Sources/ Sources/
+          fi
+
+          git add Package.swift Sources/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update Package.swift for Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION}"
+          fi
+
+          git push origin master
+
+      - name: Create tags
+        env:
+          DESCRIPTIVE_TAG: ${{ needs.check-updates.outputs.descriptive_tag }}
+          SEMVER_TAG: ${{ needs.check-updates.outputs.semver_tag }}
+        run: |
+          # Semver tag (for SPM consumers: exact: "12.9.0")
+          git tag -f "${SEMVER_TAG}"
+          git push -f origin "${SEMVER_TAG}"
+
+          # Descriptive tag (for release asset URLs in Package.swift)
+          git tag -f "${DESCRIPTIVE_TAG}"
+          git push -f origin "${DESCRIPTIVE_TAG}"
+
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FIREBASE_VERSION: ${{ inputs.firebase_version || '12.8.0' }}
-          GOOGLESIGNIN_VERSION: ${{ inputs.google_signin_version || '7.0.0' }}
+          FIREBASE_VERSION: ${{ needs.check-updates.outputs.firebase_version }}
+          GOOGLESIGNIN_VERSION: ${{ needs.check-updates.outputs.googlesignin_version }}
+          DESCRIPTIVE_TAG: ${{ needs.check-updates.outputs.descriptive_tag }}
+          SEMVER_TAG: ${{ needs.check-updates.outputs.semver_tag }}
         run: |
-          TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
+          # Delete existing release for this tag if it exists (force rebuild case)
+          gh release delete "${DESCRIPTIVE_TAG}" --yes 2>/dev/null || true
 
-          # Tag the current commit
-          git tag -f "${TAG}"
-          git push -f origin "${TAG}"
-
-          # Upload all zips as release assets
-          gh release create "${TAG}" \
+          gh release create "${DESCRIPTIVE_TAG}" \
             --title "Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION} (macOS)" \
             --notes "Pre-built macOS xcframeworks for:
           - Firebase iOS SDK ${FIREBASE_VERSION} (core, auth)
@@ -74,14 +207,10 @@ jobs:
 
           \`\`\`swift
           .package(url: \"https://github.com/SpeechifyInc/firebase-mac-xcframework.git\",
-                   exact: \"${TAG}\")
+                   exact: \"${SEMVER_TAG}\")
           \`\`\`
 
           Products: \`FirebaseCore\`, \`FirebaseAuth\`, \`GoogleSignIn\`
 
-          Built on macOS 14 (Xcode 15.4).
-
-          > **Note:** After creating this release, download the generated
-          > \`Package.swift\` from the workflow artifact and commit it to master
-          > so SPM checksums match the release assets." \
-            /tmp/firebase-mac-build/zips/*.zip
+          Built on macOS 14 (Xcode 15.4)." \
+            artifacts/*.xcframework.zip artifacts/*.bundle.zip
