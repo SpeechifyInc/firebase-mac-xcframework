@@ -20,10 +20,10 @@ set -euo pipefail
 
 FIREBASE_VERSION="${FIREBASE_VERSION:-12.8.0}"
 GOOGLESIGNIN_VERSION="${GOOGLESIGNIN_VERSION:-7.0.0}"
-WORK_DIR="/tmp/firebase-mac-build"
+WORK_DIR="/tmp/firebase-mac-build-$$"
 OUTPUT_DIR="${WORK_DIR}/output"
 
-rm -rf "${WORK_DIR}"
+rm -rf "${WORK_DIR}" 2>/dev/null || true
 mkdir -p "${WORK_DIR}" "${OUTPUT_DIR}"
 
 # =============================================================================
@@ -40,7 +40,7 @@ else
 fi
 
 echo "==> Extracting Firebase xcframeworks..."
-unzip -q "${WORK_DIR}/Firebase.zip" -d "${WORK_DIR}/firebase"
+ditto -x -k "${WORK_DIR}/Firebase.zip" "${WORK_DIR}/firebase"
 
 FIREBASE_XCFRAMEWORKS=(
   "FirebaseAnalytics/FirebaseCore.xcframework"
