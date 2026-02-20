@@ -117,10 +117,7 @@ jobs:
         run: bash scripts/validate-package.sh
 
       - name: Prepare upload
-        run: |
-          cp Package.swift /tmp/firebase-mac-build/zips/Package.swift
-          # Also copy Sources/ so the release job can commit them
-          cp -R Sources /tmp/firebase-mac-build/zips/Sources
+        run: cp Package.swift /tmp/firebase-mac-build/zips/Package.swift
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -147,7 +144,7 @@ jobs:
           name: firebase-mac-xcframeworks
           path: artifacts
 
-      - name: Commit Package.swift and Sources
+      - name: Prepare release commit
         env:
           FIREBASE_VERSION: ${{ needs.check-updates.outputs.firebase_version }}
           GOOGLESIGNIN_VERSION: ${{ needs.check-updates.outputs.googlesignin_version }}
@@ -158,10 +155,13 @@ jobs:
           # Update Package.swift
           cp artifacts/Package.swift Package.swift
 
-          # Update Sources/ (new products may have been added)
-          if [ -d artifacts/Sources ]; then
-            cp -R artifacts/Sources/ Sources/
-          fi
+          # Ensure Sources/ dirs exist for all wrapper targets
+          grep 'path: "Sources/' Package.swift | sed 's/.*path: "Sources\/\([^"]*\)".*/\1/' | while read -r dir; do
+            mkdir -p "Sources/${dir}"
+            if [ ! -f "Sources/${dir}/dummy.swift" ]; then
+              echo '// Placeholder — SPM requires at least one source file per target.' > "Sources/${dir}/dummy.swift"
+            fi
+          done
 
           git add Package.swift Sources/
           if git diff --cached --quiet; then
@@ -170,13 +170,14 @@ jobs:
             git commit -m "Update Package.swift for Firebase ${FIREBASE_VERSION} + GoogleSignIn ${GOOGLESIGNIN_VERSION}"
           fi
 
-          git push origin master
-
-      - name: Create tags
+      - name: Push and tag
         env:
           DESCRIPTIVE_TAG: ${{ needs.check-updates.outputs.descriptive_tag }}
           SEMVER_TAG: ${{ needs.check-updates.outputs.semver_tag }}
         run: |
+          # Push to a releases branch (avoids master branch protection rules)
+          git push -f origin HEAD:refs/heads/releases
+
           # Semver tag (for SPM consumers: exact: "12.9.0")
           git tag -f "${SEMVER_TAG}"
           git push -f origin "${SEMVER_TAG}"
