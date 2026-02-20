@@ -53,72 +53,72 @@ let package = Package(
         .binaryTarget(
             name: "AppAuthCore",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/AppAuthCore.xcframework.zip",
-            checksum: "fab440f786c61c2aefa8a04ab623c1521c98383200011f516b7bfd922368667a"
+            checksum: "91166e45e89685c58bd4ebfa841dadd3e2647e41c5958c48b7215dd9ff955755"
         ),
         .binaryTarget(
             name: "FBLPromises",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FBLPromises.xcframework.zip",
-            checksum: "ce7f2cb91f4ec8d5c54ee5b0bc1520cc679f46fe126475a8bd53a0c7a748d244"
+            checksum: "5edfabe6a56136dafb99fd6802f9b6cf91d66ac3dcfc0d05b2347b8a9ef18ee2"
         ),
         .binaryTarget(
             name: "FirebaseAppCheckInterop",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseAppCheckInterop.xcframework.zip",
-            checksum: "1401a541f4e06c5d2a48c97c60a072f4440ad44da299e2f361a1896e9a503271"
+            checksum: "00b3232cc1e395ccef22427964581dfd211a67f967897ce5104c253c8fa11260"
         ),
         .binaryTarget(
             name: "FirebaseAuth",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseAuth.xcframework.zip",
-            checksum: "9b985cb1c484e19238cd9e65dcf74312bee8d3d7a60079d68bff1adfa51efa2b"
+            checksum: "ff674ba9c2c15330cccf75362aeb2e6073d99ef8b56dca36c04a8ad07f41f6c3"
         ),
         .binaryTarget(
             name: "FirebaseAuthInterop",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseAuthInterop.xcframework.zip",
-            checksum: "cbf8f6a925d37731847027761a0c00f36099c14e84ebaf3c0f97a61d779d3c8f"
+            checksum: "0b9c5cc4cd7fa34b66060b096147fc97e5f1eab190341cbf53b1d75183c7f005"
         ),
         .binaryTarget(
             name: "FirebaseCore",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseCore.xcframework.zip",
-            checksum: "83e4591f341ccaf9ad9089a1ad2568465c447461b4466e3af9db017ac0232360"
+            checksum: "da4d63b9e877e1ffb85139ec8ad6a60a7bffb5e981090cfefe2c58ebcdfc8356"
         ),
         .binaryTarget(
             name: "FirebaseCoreExtension",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseCoreExtension.xcframework.zip",
-            checksum: "5f89ba7a1c2a92d634bea8a161b03bf2cc41e152d45cd7b8dcc18488af8fbcf6"
+            checksum: "b779f5b79c4290f6801c6500d7ee592cd576f0bc1e5c674ad86bf3d4c22713ed"
         ),
         .binaryTarget(
             name: "FirebaseCoreInternal",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseCoreInternal.xcframework.zip",
-            checksum: "24fedeef278b7433c7bbadf53c24e5839cd79b6fc7a3f6c91e5087f73e8cdf16"
+            checksum: "89a197e92398beb3e5d2b8f833c6fc50b967a15ae8a6bfb3b757e015b23c0387"
         ),
         .binaryTarget(
             name: "FirebaseInstallations",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/FirebaseInstallations.xcframework.zip",
-            checksum: "7e59482718820ce8db39be7f896ebf84f76b15033372b8f051f99d065c9f4628"
+            checksum: "7cc3bfd029096c3a39450ca99192f8b80bc82eda06de462f881412e185b4f50f"
         ),
         .binaryTarget(
             name: "GTMAppAuth",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/GTMAppAuth.xcframework.zip",
-            checksum: "034a0ce2add7673281ee5a930aa4631772dc54a05ba506ea0461933be4e44552"
+            checksum: "b8d55cc07eb2b1cabf43ede545cd15beac0ed608f6cc2617021d50c21408edb7"
         ),
         .binaryTarget(
             name: "GTMSessionFetcher",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/GTMSessionFetcher.xcframework.zip",
-            checksum: "f8f94428bc77f7565c66bc53ab3954e367108fa843dc918fffc495744eea11ac"
+            checksum: "2ae6e855d6d08e44106ee86022816994e617a10e20488c995e9ac83204287a28"
         ),
         .binaryTarget(
             name: "GoogleSignIn",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/GoogleSignIn.xcframework.zip",
-            checksum: "175fbd8540b9cde75ea04c4bc1599823baec8eef65a1b4357ad7e465e4385fe7"
+            checksum: "b99abca79ce3803405a9d652fc72969daeaf5009f8734cebce94eba1852869e6"
         ),
         .binaryTarget(
             name: "GoogleUtilities",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/GoogleUtilities.xcframework.zip",
-            checksum: "17340a38da4b20cfc45b14a25d3225c7e2dd059e0d74b082c7c8741fd9c7596d"
+            checksum: "9118a82eb861776ec6c91f01e862d891f38285eba8458e09dd34ee008a225049"
         ),
         .binaryTarget(
             name: "nanopb",
             url: "https://github.com/SpeechifyInc/firebase-mac-xcframework/releases/download/firebase-12.8.0-googlesignin-7.0.0/nanopb.xcframework.zip",
-            checksum: "9513f3c84c17e882063b15fb35e536f13294e597dcea0a15107b4ca1564ae88d"
+            checksum: "ed5cc69e8f5cde8ca5cb6c5fa542e9356f07ad5e2d3ca8c156e2f8b79d1da2e4"
         ),
     ]
 )
