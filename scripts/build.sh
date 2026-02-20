@@ -29,9 +29,15 @@ mkdir -p "${WORK_DIR}" "${OUTPUT_DIR}"
 # =============================================================================
 # Step 1: Download and extract Firebase xcframeworks
 # =============================================================================
-echo "==> [1/3] Downloading Firebase ${FIREBASE_VERSION}..."
-curl -L --retry 3 -o "${WORK_DIR}/Firebase.zip" \
-  "https://github.com/firebase/firebase-ios-sdk/releases/download/${FIREBASE_VERSION}/Firebase.zip"
+CACHED_ZIP="${HOME}/Downloads/Firebase.zip"
+if [ -f "${CACHED_ZIP}" ]; then
+  echo "==> [1/3] Using cached Firebase zip: ${CACHED_ZIP}"
+  cp "${CACHED_ZIP}" "${WORK_DIR}/Firebase.zip"
+else
+  echo "==> [1/3] Downloading Firebase ${FIREBASE_VERSION}..."
+  curl -L --retry 3 -o "${WORK_DIR}/Firebase.zip" \
+    "https://github.com/firebase/firebase-ios-sdk/releases/download/${FIREBASE_VERSION}/Firebase.zip"
+fi
 
 echo "==> Extracting Firebase xcframeworks..."
 unzip -q "${WORK_DIR}/Firebase.zip" -d "${WORK_DIR}/firebase"
