@@ -241,6 +241,10 @@ make_xcframework "GTMSessionFetcher" "GTMSessionFetcherCore.build" \
 make_xcframework "AppAuthCore" "AppAuthCore.build" \
   "AppAuth-iOS/Sources/AppAuthCore"
 
+# -- AppAuth (macOS-specific categories: OIDAuthorizationService+Mac, OIDExternalUserAgentMac, etc.) --
+make_xcframework "AppAuth" "AppAuth.build" \
+  "AppAuth-iOS/Sources/AppAuth/macOS"
+
 # -- GTMAppAuth --
 make_xcframework "GTMAppAuth" "GTMAppAuth.build" \
   "GTMAppAuth/GTMAppAuth/Sources/Public/GTMAppAuth"
