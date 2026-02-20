@@ -154,37 +154,37 @@ make_xcframework() {
   lipo -create "${STAGING}/arm64/lib${name}.a" "${STAGING}/x86_64/lib${name}.a" \
     -output "${STAGING}/lib${name}.a"
 
-  # Build a macOS versioned framework bundle
-  # Must use Versions/A/ layout so Xcode's validation finds Info.plist
+  # Build a flat framework bundle
+  # Xcode's embed phase flattens versioned layouts and drops Info.plist,
+  # so we use a flat layout where Info.plist sits at the framework root.
   local fw="${STAGING}/${name}.framework"
-  local va="${fw}/Versions/A"
-  mkdir -p "${va}/Headers" "${va}/Modules" "${va}/Resources"
+  mkdir -p "${fw}/Headers" "${fw}/Modules"
 
   # Binary
-  cp "${STAGING}/lib${name}.a" "${va}/${name}"
+  cp "${STAGING}/lib${name}.a" "${fw}/${name}"
 
   # Headers
   if [ -n "${header_rel}" ] && [ -d "${CHECKOUTS}/${header_rel}" ]; then
-    find "${CHECKOUTS}/${header_rel}" -name '*.h' -exec cp {} "${va}/Headers/" \;
+    find "${CHECKOUTS}/${header_rel}" -name '*.h' -exec cp {} "${fw}/Headers/" \;
   fi
 
   # Module map
   local umbrella=""
-  if [ -f "${va}/Headers/${name}.h" ]; then
+  if [ -f "${fw}/Headers/${name}.h" ]; then
     umbrella="umbrella header \"${name}.h\""
   else
     umbrella="umbrella \".\""
   fi
 
-  cat > "${va}/Modules/module.modulemap" << MMEOF
+  cat > "${fw}/Modules/module.modulemap" << MMEOF
 framework module ${name} {
     ${umbrella}
     export *
 }
 MMEOF
 
-  # Info.plist
-  cat > "${va}/Resources/Info.plist" << IPEOF
+  # Info.plist (at framework root for flat layout)
+  cat > "${fw}/Info.plist" << IPEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -208,13 +208,6 @@ MMEOF
 </dict>
 </plist>
 IPEOF
-
-  # macOS framework symlinks
-  ln -sf A "${fw}/Versions/Current"
-  ln -sf Versions/Current/${name} "${fw}/${name}"
-  ln -sf Versions/Current/Headers "${fw}/Headers"
-  ln -sf Versions/Current/Modules "${fw}/Modules"
-  ln -sf Versions/Current/Resources "${fw}/Resources"
 
   xcodebuild -create-xcframework \
     -framework "${fw}" \
