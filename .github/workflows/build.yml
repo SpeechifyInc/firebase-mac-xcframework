@@ -14,6 +14,10 @@ on:
         description: 'GoogleSignIn-iOS version (leave empty to auto-detect latest)'
         required: false
         default: ''
+      package_version:
+        description: 'SPM semver tag (defaults to firebase_version if empty)'
+        required: false
+        default: ''
       force_build:
         description: 'Force build even if tags already exist'
         type: boolean
@@ -63,8 +67,14 @@ jobs:
           FIREBASE_VERSION="${FIREBASE_VERSION#v}"
           GOOGLESIGNIN_VERSION="${GOOGLESIGNIN_VERSION#v}"
 
+          # --- Resolve package version (SPM semver tag) ---
+          if [ -n "${{ inputs.package_version }}" ]; then
+            SEMVER_TAG="${{ inputs.package_version }}"
+          else
+            SEMVER_TAG="${FIREBASE_VERSION}"
+          fi
+
           DESCRIPTIVE_TAG="firebase-${FIREBASE_VERSION}-googlesignin-${GOOGLESIGNIN_VERSION}"
-          SEMVER_TAG="${FIREBASE_VERSION}"
 
           echo "firebase_version=${FIREBASE_VERSION}" >> "$GITHUB_OUTPUT"
           echo "googlesignin_version=${GOOGLESIGNIN_VERSION}" >> "$GITHUB_OUTPUT"
